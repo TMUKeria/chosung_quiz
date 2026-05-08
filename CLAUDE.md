@@ -1,0 +1,166 @@
+# chosung_quiz — 초성 퀴즈 수업 도구
+
+> Next.js 16 관련 주의사항은 [AGENTS.md](./AGENTS.md)도 같이 읽기.
+> (Next.js 16은 v15 이전과 API/컨벤션이 달라 train data가 어긋날 수 있음 — `middleware.ts` → `proxy.ts` 등.)
+
+> 이 문서는 프로젝트의 합의된 스펙입니다. 데스크탑의 `chosung_quiz_AGENTS.md`가 원본 사본.
+
+---
+
+## 프로젝트 개요
+
+선생님이 수업용 초성 퀴즈를 만들고, 수업 시간에 풀스크린으로 진행하는 웹 도구.
+
+**핵심 사용자**
+- **선생님** — 전날 수업 준비 시 퀴즈 세트 생성/수정/삭제, 당일 수업 중 발표
+- **학생(특수아동)** — 큰 모니터로 화면만 봄. 입력/계정 없음. 타이머 없음.
+
+---
+
+## 기술 스택
+
+- **Next.js 16** (App Router, TypeScript, Turbopack) — `middleware.ts` 아닌 **`proxy.ts`** 컨벤션 주의
+- **React 19**
+- **Tailwind CSS 4**
+- **Supabase** (Postgres + Auth + Row Level Security + Storage 사진 힌트용)
+- **Vercel** (배포)
+
+---
+
+## 확정된 스펙
+
+| 항목 | 결정 |
+|---|---|
+| 학생 계정 | ❌ 없음 — 선생님만 로그인 |
+| 글자 수 | 문제마다 자유 (단어 입력하면 자동으로 초성 변환) |
+| 띄어쓰기 | 보존 — `사과 주스` → `ㅅㄱ ㅈㅅ` |
+| 힌트 타입 | `text`, `image`, `reveal_jamo` (선생님이 자유 선택, 개수도 자유) |
+| 힌트 공개 | 처음 다 숨김 → 선생님이 버튼 누르면 하나씩 펼침 |
+| 정답 표시 | 텍스트만 (이펙트/애니메이션 없음 — 특수아동 자극 최소화) |
+| 수정/삭제 | 둘 다 가능 |
+| 공유 기능 | ❌ v1에서는 본인 퀴즈만 |
+| 발표 모드 | 풀스크린 + 큰 글자 + 고대비 |
+| 타이머 | ❌ 없음 |
+
+---
+
+## 데이터 모델
+
+```
+quiz_sets
+  id          uuid pk
+  teacher_id  uuid (auth.users 참조)
+  title       text
+  created_at  timestamptz
+
+questions
+  id          uuid pk
+  quiz_set_id uuid fk -> quiz_sets
+  answer      text       -- 정답 단어 (초성은 클라이언트에서 자동 계산)
+  order       int
+
+hints
+  id          uuid pk
+  question_id uuid fk -> questions
+  type        text       -- 'text' | 'image' | 'reveal_jamo'
+  content     text       -- 텍스트 / 이미지 URL / 공개할 자모
+  order       int
+```
+
+**RLS 정책**: 모든 테이블에서 `teacher_id = auth.uid()` 인 행만 본인이 SELECT/INSERT/UPDATE/DELETE 가능.
+
+---
+
+## 핵심 로직 — 한글 → 초성 변환
+
+`src/lib/utils/hangul.ts`:
+
+```ts
+const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
+
+export function toChosung(text: string): string {
+  return [...text].map(ch => {
+    const code = ch.charCodeAt(0) - 0xAC00
+    if (code < 0 || code > 11171) return ch  // 한글 아니면 그대로 (공백 등)
+    return CHOSUNG[Math.floor(code / 588)]
+  }).join('')
+}
+```
+
+라이브러리 안 쓰고 직접 구현하는 이유: 한글 유니코드 구조 학습 + 면접 토픽.
+
+---
+
+## 폴더 구조
+
+```
+src/
+├── app/                  Next.js App Router
+├── components/           재사용 UI (Server Component 우선)
+├── lib/
+│   ├── supabase/
+│   │   ├── client.ts     브라우저용
+│   │   └── server.ts     서버용
+│   └── utils/
+│       └── hangul.ts     초성 변환
+└── proxy.ts              Supabase 세션 갱신 (Next.js 16: middleware.ts 아님)
+```
+
+---
+
+## 코딩 규칙
+
+- **Server Component 기본**, `"use client"`는 인터랙션 필요할 때만
+- **TypeScript strict**, `any` 금지 (모르면 `unknown` 후 좁히기)
+- **Tailwind 유틸리티 클래스** 우선
+- **`@/*` alias** 사용 (상대경로 `../../` 지양)
+- 컴포넌트 파일명: **PascalCase** (`QuizCard.tsx`), 유틸/훅: **camelCase**
+
+---
+
+## 보안 규칙
+
+1. 모든 Supabase 테이블에 **RLS 켜기**
+2. `service_role` 키는 서버 코드에서만 (`NEXT_PUBLIC_` 절대 금지)
+3. 에러 메시지에 raw DB 에러 노출 금지 — 사용자 친화적 메시지로 변환
+4. 이미지 힌트 업로드는 Supabase **Storage** + 서명된 URL 사용
+5. 학생 PII는 다루지 않음 (학생 계정 자체가 없음 — 보안 부담 ↓)
+
+---
+
+## Git 워크플로우
+
+- `main` 브랜치 보호, 작업은 `feat/<name>`, `fix/<name>`, `chore/<name>`
+- **Conventional Commits**: `feat:`, `fix:`, `docs:`, `refactor:`, `chore:`
+- 작은 PR 단위로 머지 (셀프 리뷰 후)
+- PR 본문에 `Closes #N` 으로 이슈 연결
+
+---
+
+## 작업 순서 (PR 단위)
+
+1. `chore: scaffold next.js 16 + supabase` — 초기 셋업
+2. `feat: db schema for quiz sets and questions` — Supabase 스키마 + RLS
+3. `feat: teacher auth` — 선생님 로그인
+4. `feat: quiz creation form` — 퀴즈 만들기 (단어 입력 → 자동 초성 변환)
+5. `feat: quiz list & edit & delete` — 관리 페이지
+6. `feat: presentation mode` — 수업용 풀스크린 (**핵심 차별화**)
+7. `feat: hint reveal & answer reveal` — 힌트/정답 토글
+8. `docs: README with demo link` — 포트폴리오 마무리
+
+---
+
+## 응답 언어
+
+- 대화: **한국어**
+- 코드/식별자/주석/커밋 메시지: **영어**
+- UI 텍스트: **한국어** (선생님/학생이 한국어 사용자)
+
+---
+
+## 포트폴리오 어필 포인트
+
+- **접근성/포용적 디자인**: "특수아동 수업 맥락에서 왜 이 UX 결정을 했는가"를 README에 정리
+- **한글 유니코드 직접 다루기**: 라이브러리 없이 자모 분리 — 면접 토픽
+- **Supabase RLS**: 행 단위 접근 제어 정책 설계 — 백엔드 보안 학습 증거
+- **Vercel 배포 링크**: README에 클릭 가능한 데모 링크 필수
