@@ -1,8 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { saveQuizAction, type HintType } from './actions'
+import { useEffect, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { toChosung, splitHangulSyllables, hasJongsung } from '@/lib/utils/hangul'
+import type {
+  HintType,
+  SaveQuizInput,
+  SaveQuizResult,
+} from './quiz-form-types'
 
 type Hint = {
   id: string
@@ -15,6 +20,21 @@ type Question = {
   answer: string
   category: string
   hints: Hint[]
+}
+
+type InitialData = {
+  title: string
+  questions: {
+    answer: string
+    category: string | null
+    hints: { type: HintType; content: string }[]
+  }[]
+}
+
+export type QuizFormProps = {
+  mode: 'create' | 'edit'
+  initialData?: InitialData
+  onSave: (input: SaveQuizInput) => Promise<SaveQuizResult>
 }
 
 const HINT_TYPE_LABELS: Record<HintType, string> = {
@@ -35,19 +55,58 @@ const newQuestion = (): Question => ({
   hints: [],
 })
 
-export function NewQuizForm() {
-  const [title, setTitle] = useState('')
-  const [questions, setQuestions] = useState<Question[]>([newQuestion()])
+function buildInitialState(initial?: InitialData): {
+  title: string
+  questions: Question[]
+} {
+  if (!initial) {
+    return { title: '', questions: [newQuestion()] }
+  }
+  return {
+    title: initial.title,
+    questions: initial.questions.map((q) => ({
+      id: crypto.randomUUID(),
+      answer: q.answer,
+      category: q.category ?? '',
+      hints: q.hints.map((h) => ({
+        id: crypto.randomUUID(),
+        type: h.type,
+        content: h.content,
+      })),
+    })),
+  }
+}
+
+const LEAVE_WARNING = '변경사항이 저장되지 않았어요. 정말 나가시겠어요?'
+
+export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
+  const router = useRouter()
+  const init = buildInitialState(initialData)
+  const [title, setTitleState] = useState(init.title)
+  const [questions, setQuestions] = useState<Question[]>(init.questions)
   const [error, setError] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const addQuestion = () => setQuestions((qs) => [...qs, newQuestion()])
+  const setTitle = (next: string) => {
+    setTitleState(next)
+    setIsDirty(true)
+  }
 
-  const removeQuestion = (qid: string) =>
+  const addQuestion = () => {
+    setQuestions((qs) => [...qs, newQuestion()])
+    setIsDirty(true)
+  }
+
+  const removeQuestion = (qid: string) => {
     setQuestions((qs) => qs.filter((q) => q.id !== qid))
+    setIsDirty(true)
+  }
 
-  const updateQuestion = (qid: string, patch: Partial<Question>) =>
+  const updateQuestion = (qid: string, patch: Partial<Question>) => {
     setQuestions((qs) => qs.map((q) => (q.id === qid ? { ...q, ...patch } : q)))
+    setIsDirty(true)
+  }
 
   const addHint = (qid: string) => {
     const q = questions.find((x) => x.id === qid)
@@ -80,10 +139,16 @@ export function NewQuizForm() {
     updateQuestion(qid, { hints: next })
   }
 
+  const handleBack = () => {
+    if (isDirty && !confirm(LEAVE_WARNING)) return
+    router.push('/admin')
+  }
+
   const handleSave = () => {
     setError(null)
+    setIsDirty(false)
     startTransition(async () => {
-      const result = await saveQuizAction({
+      const result = await onSave({
         title,
         questions: questions.map((q) => ({
           answer: q.answer,
@@ -91,12 +156,36 @@ export function NewQuizForm() {
           hints: q.hints.map((h) => ({ type: h.type, content: h.content })),
         })),
       })
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        setIsDirty(true)
+      }
     })
   }
 
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
+  const submitLabel = mode === 'edit' ? '수정 저장' : '저장'
+  const submitPendingLabel = mode === 'edit' ? '저장 중...' : '저장 중...'
+
   return (
     <div className="flex flex-col gap-6">
+      <button
+        type="button"
+        onClick={handleBack}
+        className="self-start text-sm text-gray-500 hover:underline"
+      >
+        ← 홈으로
+      </button>
+
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">퀴즈 제목</span>
         <input
@@ -143,7 +232,7 @@ export function NewQuizForm() {
         disabled={isPending}
         className="rounded bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isPending ? '저장 중...' : '저장'}
+        {isPending ? submitPendingLabel : submitLabel}
       </button>
     </div>
   )

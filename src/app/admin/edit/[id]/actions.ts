@@ -3,9 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { SaveQuizInput, SaveQuizResult } from '../quiz-form-types'
+import type { SaveQuizInput, SaveQuizResult } from '../../quiz-form-types'
 
-export async function saveQuizAction(input: SaveQuizInput): Promise<SaveQuizResult> {
+export async function updateQuizAction(
+  quizSetId: string,
+  input: SaveQuizInput,
+): Promise<SaveQuizResult> {
   if (!input.title.trim()) return { error: '퀴즈 제목을 입력해주세요.' }
   if (input.questions.length === 0) return { error: '문제를 1개 이상 추가해주세요.' }
   for (const q of input.questions) {
@@ -21,15 +24,22 @@ export async function saveQuizAction(input: SaveQuizInput): Promise<SaveQuizResu
   } = await supabase.auth.getUser()
   if (!user) return { error: '로그인이 필요해요.' }
 
-  const { data: quizSet, error: quizSetError } = await supabase
+  const { error: titleError } = await supabase
     .from('quiz_sets')
-    .insert({ teacher_id: user.id, title: input.title.trim() })
-    .select()
-    .single()
-  if (quizSetError || !quizSet) return { error: '퀴즈 저장에 실패했어요.' }
+    .update({ title: input.title.trim() })
+    .eq('id', quizSetId)
+  if (titleError) return { error: '퀴즈 저장에 실패했어요.' }
+
+  // delete-and-replace: 기존 문제/힌트를 모두 지우고 새로 INSERT.
+  // questions 삭제 시 hints는 ON DELETE CASCADE로 함께 정리됨.
+  const { error: deleteError } = await supabase
+    .from('questions')
+    .delete()
+    .eq('quiz_set_id', quizSetId)
+  if (deleteError) return { error: '기존 문제 삭제에 실패했어요.' }
 
   const questionsToInsert = input.questions.map((q, i) => ({
-    quiz_set_id: quizSet.id,
+    quiz_set_id: quizSetId,
     answer: q.answer.trim(),
     category: q.category?.trim() || null,
     order: i + 1,
