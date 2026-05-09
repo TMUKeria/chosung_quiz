@@ -16,3 +16,27 @@ export function toChosung(text: string): string {
     })
     .join('')
 }
+
+export function countHangulSyllables(text: string): number {
+  let count = 0
+  for (const ch of text) {
+    const code = ch.charCodeAt(0)
+    if (code >= HANGUL_BASE && code <= HANGUL_LAST) count++
+  }
+  return count
+}
+
+export function splitHangulSyllables(text: string): string[] {
+  const result: string[] = []
+  for (const ch of text) {
+    const code = ch.charCodeAt(0)
+    if (code >= HANGUL_BASE && code <= HANGUL_LAST) result.push(ch)
+  }
+  return result
+}
+
+export function hasJongsung(syllable: string): boolean {
+  const code = syllable.charCodeAt(0)
+  if (code < HANGUL_BASE || code > HANGUL_LAST) return false
+  return (code - HANGUL_BASE) % 28 !== 0
+}

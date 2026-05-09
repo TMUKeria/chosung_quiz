@@ -34,15 +34,16 @@
 | 학생 계정 | ❌ 없음 — 선생님만 로그인 |
 | 글자 수 | 문제마다 자유 (단어 입력하면 자동으로 초성 변환) |
 | 띄어쓰기 | 보존 — `사과 주스` → `ㅅㄱ ㅈㅅ` |
-| 힌트 타입 | `text` · `image` · `reveal_jamo` · `reveal_vowel` (자유 조합/순서) |
-| 모음 힌트 | `reveal_vowel` 사용 시 글자별로 자음+모음 결합해서 음절을 부분 공개 (`ㅅ ㄱ` → `사 ㄱ` → `사과`) |
-| 모음 입력 | 정답을 분석해 모음 자동 추출. 선생님은 "모음 힌트 사용 ON/OFF" 토글만. 글자 수만큼 `reveal_vowel` 행이 자동 생성됨 |
+| 힌트 타입 | `text` · `image` · `reveal_jongsung` · `reveal_vowel` · `reveal_syllable` (자유 조합/순서) |
+| 음절 부분/전체 공개 | 선생님이 정답의 글자(음절) 한 개를 골라 어느 정도까지 공개할지 결정. 3종류: ① 받침 자음만(`reveal_jongsung`), ② 자음+모음·받침 가림(`reveal_vowel`), ③ 글자 통째 자음+모음+받침(`reveal_syllable`) |
+| 글자 선택 UX | 힌트 추가 시 위 3종 중 하나 선택 + 정답의 글자 인덱스 중 하나 선택. 자동 생성/토글 없음. 받침 없는 글자에 `reveal_jongsung` 추가는 폼에서 막거나 경고. 같은 (글자, 타입) 조합 중복도 안내. |
 | 사용 가이드 | 모든 페이지 헤더에 `?` 아이콘 → 모달로 페이지별 버튼 설명 |
 | 힌트 공개 | 처음 다 숨김 → 선생님이 버튼 누르면 하나씩 펼침 |
 | 정답 표시 | 텍스트만 (이펙트/애니메이션 없음 — 특수아동 자극 최소화) |
 | 수정/삭제 | 둘 다 가능 |
 | 공유 기능 | ❌ v1에서는 본인 퀴즈만 |
 | 발표 모드 | 풀스크린 + 큰 글자 + 고대비 |
+| 카테고리 | 문제마다 자유 입력 (선택). 발표 모드 시작 시 학생에게 첫 힌트로 항상 표시 |
 | 타이머 | ❌ 없음 |
 
 ---
@@ -60,21 +61,28 @@ questions
   id          uuid pk
   quiz_set_id uuid fk -> quiz_sets
   answer      text       -- 정답 단어 (초성은 클라이언트에서 자동 계산)
+  category    text?      -- 선택. 발표 모드 시작 시 학생에게 첫 힌트로 표시
   order       int
 
 hints
   id          uuid pk
   question_id uuid fk -> questions
-  type        text       -- 'text' | 'image' | 'reveal_jamo' | 'reveal_vowel'
+  type        text       -- 'text' | 'image' | 'reveal_jongsung' | 'reveal_vowel' | 'reveal_syllable'
   content     text       -- 의미는 type 별로 다름:
-                         --   text         : 표시할 텍스트
-                         --   image        : Storage 이미지 경로
-                         --   reveal_jamo  : 공개할 자모 문자열
-                         --   reveal_vowel : 공개할 글자 인덱스(0-base, 정수 문자열)
-  order       int        -- 공개 순서 (모음/자모/텍스트/이미지를 자유롭게 섞을 수 있음)
+                         --   text             : 표시할 텍스트
+                         --   image            : Storage 이미지 경로
+                         --   reveal_jongsung  : 공개할 글자 인덱스 (그 글자의 받침 자음만)
+                         --   reveal_vowel     : 공개할 글자 인덱스 (그 글자의 자음+모음, 받침 가림)
+                         --   reveal_syllable  : 공개할 글자 인덱스 (그 글자 통째 — 자음+모음+받침)
+  order       int        -- 공개 순서 (텍스트/이미지/3가지 음절 힌트를 자유롭게 섞을 수 있음)
 ```
 
-> **DB 마이그레이션 메모**: `hints.type` CHECK는 PR #2에서 `'text' | 'image' | 'reveal_jamo'`만 허용하도록 만들어졌음. `reveal_vowel` 추가는 단독 PR로 빼지 않고 PR #4(quiz creation form)에 묶어 `ALTER TABLE hints DROP CONSTRAINT ...; ADD CONSTRAINT ... CHECK (type IN ('text','image','reveal_jamo','reveal_vowel'))` 마이그레이션으로 처리.
+> **DB 마이그레이션 메모**: PR #4(quiz creation form)에 두 개의 마이그레이션 파일이 들어감.
+> - `0002_quiz_creation_form_support.sql`
+>   1. `hints.type` CHECK 확장 — `reveal_vowel` 추가 (PR #2 시점엔 `'text' | 'image' | 'reveal_jamo'`만 허용했음).
+>   2. `questions.category` 컬럼 추가 — nullable text. 발표 모드 시작 시 학생에게 첫 힌트로 표시.
+> - `0003_replace_reveal_jamo_with_syllable_hints.sql`
+>   1. `hints.type` CHECK 재구성 — `reveal_jamo` 제거 + `reveal_jongsung` / `reveal_syllable` 추가. 단편 자모 공개를 빼고 "음절 부분/전체 공개" 3종(받침/모음/글자)으로 통일.
 
 **RLS 정책**: 모든 테이블에서 `teacher_id = auth.uid()` 인 행만 본인이 SELECT/INSERT/UPDATE/DELETE 가능.
 
@@ -98,19 +106,9 @@ export function toChosung(text: string): string {
 
 라이브러리 안 쓰고 직접 구현하는 이유: 한글 유니코드 구조 학습 + 면접 토픽.
 
-### 모음 힌트용 추가 함수 (PR #4 또는 #7에서 구현 예정)
+### 음절 부분/전체 공개용 추가 함수 (PR #7 발표 모드에서 구현 예정)
 
-```ts
-// 한글 음절에서 중성(모음) 인덱스. 한글 음절이 아니면 null.
-export function getJungsungIndex(syllable: string): number | null
-
-// 초성 인덱스 + 중성 인덱스 → 종성 없는 음절. (예: 9, 0 → '사')
-export function composeChoJung(choIdx: number, jungIdx: number): string
-
-// answer의 index번째 글자만 자음+모음 결합, 나머지는 초성. 공백 보존.
-// 예: revealVowelAt('사과 주스', 0) → '사ㄱ ㅈㅅ'
-export function revealVowelAt(answer: string, index: number): string
-```
+발표 모드에서 정답의 특정 글자만 골라서 ① 받침만 / ② 자음+모음 / ③ 글자 통째 로 화면에 그릴 수 있어야 함. 한글 음절을 초성·중성·종성으로 분해/재결합하는 헬퍼들이 필요. 정확한 시그니처와 받침 인라인 표시 방식(자모 나열 / 괄호 / 분리 영역)은 PR #7 시작 시 같이 결정.
 
 ---
 
@@ -188,9 +186,9 @@ src/
 - 클릭 시 페이지별로 다른 콘텐츠의 모달 오픈.
 - 콘텐츠는 한국어 짧은 글머리표 (선생님이 1분 안에 훑을 분량).
 - 페이지별 콘텐츠:
-  - **만들기**(`/admin/new`): "정답 입력 → 자동 초성 변환 / [+ 힌트] 버튼 / 모음 힌트 토글"
+  - **만들기**(`/admin/new`): "정답 입력 → 자동 초성 변환 / 카테고리 입력 / [+ 힌트] 버튼 (텍스트 / 받침 / 모음 / 글자 전체 중 선택) → 글자 인덱스 선택"
   - **목록**(`/admin`): "퀴즈 클릭 → 발표 모드 / 수정 / 삭제"
-  - **발표**(`/play/:id`): "다음 힌트 / 정답 확인 / 다음 문제 / 풀스크린 토글"
+  - **발표**(`/play/:id`): "(첫 화면에 카테고리 자동 표시) / 다음 힌트 / 정답 확인 / 다음 문제 / 풀스크린 토글"
 - 컴포넌트: `<HelpButton />` (헤더에 배치) + `<HelpModal page="...">` (페이지 prop으로 분기).
 - 접근성: ESC 닫힘, 포커스 트랩, `aria-modal="true"`, 스크린리더용 라벨.
 
