@@ -13,9 +13,18 @@ export async function signupAction(
 ): Promise<SignupActionState> {
   const email = formData.get('email')
   const password = formData.get('password')
+  const confirmPassword = formData.get('confirmPassword')
 
-  if (typeof email !== 'string' || typeof password !== 'string') {
+  if (
+    typeof email !== 'string' ||
+    typeof password !== 'string' ||
+    typeof confirmPassword !== 'string'
+  ) {
     return { error: '이메일과 비밀번호를 모두 입력해주세요.' }
+  }
+
+  if (password !== confirmPassword) {
+    return { error: '비밀번호가 일치하지 않아요.' }
   }
 
   const supabase = await createClient()

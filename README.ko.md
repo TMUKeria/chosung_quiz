@@ -1,5 +1,7 @@
 # 초성 퀴즈 — 수업용 초성 맞히기 도구
 
+[![Release](https://img.shields.io/github/v/release/TMUKeria/chosung_quiz?label=release&color=blue)](https://github.com/TMUKeria/chosung_quiz/releases)
+
 [Read in English →](README.md)
 
 선생님이 수업용 초성 퀴즈를 만들고, 수업 시간에 풀스크린으로 학생들에게 보여주는 웹 도구. **특수교육 맥락의 포용적 디자인** — 타이머 X, 학생 입력 X, 시각적 자극 X.
