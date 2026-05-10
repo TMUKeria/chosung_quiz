@@ -1,64 +1,97 @@
-# 초성 퀴즈 (chosung_quiz)
+# 초성 퀴즈 — Korean Initial Consonant Quiz for the Classroom
 
-> 특수아동 수업용 초성 퀴즈 도구 — 선생님이 퀴즈를 만들고, 큰 화면에 풀스크린으로 띄워서 함께 풀어요.
+[한국어로 보기 →](README.ko.md)
 
-🚀 **Demo**: _배포 후 추가 예정_ (Vercel)
+A web tool for Korean teachers to author and run **chosung** (initial-consonant) quizzes during class. Designed around the inclusive-education context — special-needs students see a clean, fullscreen, high-contrast play screen with no timers, no input, and no distracting effects.
 
-## ✨ 주요 특징
+🔗 **[Live Demo](https://chosung-quiz-three.vercel.app)** — sign up freely to try
 
-- **풀스크린 발표 모드** — 큰 글자 + 고대비 + 자극 최소화 (특수아동 친화)
-- **자동 초성 변환** — 단어 입력하면 한글 유니코드 직접 분석해서 초성으로 변환 (`사과 주스` → `ㅅㄱ ㅈㅅ`)
-- **유연한 힌트 시스템** — 텍스트 / 이미지 / 자모 공개를 자유롭게 조합
-- **타이머 없음, 입력 없음** — 학생은 화면만 보면 됨
+---
 
-## 🛠️ 기술 스택
+## Screenshots
 
-| 영역 | 도구 |
+| Login | Admin list |
 |---|---|
-| Framework | Next.js 16 (App Router, Turbopack) |
-| Language | TypeScript (strict) |
-| UI | Tailwind CSS 4 |
-| Backend | Supabase (Postgres + Auth + Storage + RLS) |
-| Hosting | Vercel |
+| ![Login](docs/screenshots/01-login.png) | ![Admin list](docs/screenshots/02-admin-list.png) |
 
-## 🏃 로컬 실행
+| Create form | Play screen |
+|---|---|
+| ![Create form](docs/screenshots/03-create-form.png) | ![Play screen](docs/screenshots/04-play.png) |
+
+The play-screen capture shows pattern C jongsung rendering — the final consonant `ㄴ` sits on its own row beneath `ㅋ`, which is how Hangul's syllable structure is honored without forcing an impossible inline composition.
+
+---
+
+## Why this exists
+
+The play screen is built around how special-needs students interact with a classroom display:
+
+- **No timers** — they create stress for the very students this tool serves.
+- **No student input** — anything that depends on reading speed becomes a barrier instead of a help.
+- **No animations or sound** — sensory load matters.
+
+Teachers drive the entire flow from a single screen. Students just watch.
+
+---
+
+## Tech stack
+
+- **Next.js 16** (App Router · Server Actions · Turbopack)
+- **React 19** with `useActionState` / `useTransition`
+- **TypeScript** (strict; no `any`)
+- **Tailwind CSS 4**
+- **Supabase** — Postgres · Auth · Row Level Security
+- **react-joyride** — first-run spotlight tour for the creation form
+- **Vercel** — production deploy
+
+---
+
+## Architecture highlights
+
+### RLS as the security boundary
+Every table has `auth.uid() = teacher_id` policies. Child tables (`questions`, `hints`) inherit ownership through EXISTS subqueries against `quiz_sets`. The app code never writes a `where teacher_id = ?` clause — the database refuses to return other users' rows even if a developer forgets to filter.
+
+### Hangul decomposition without a library
+Chosung extraction and jongsung handling use raw arithmetic on the Unicode codepoint:
+```ts
+const code = ch.charCodeAt(0) - 0xAC00
+const choIdx  = Math.floor(code / 588)
+const jongIdx = code % 28
+```
+
+### Migration as code, accumulated
+`supabase/migrations/` holds three sequenced SQL files. Even when a later migration supersedes an earlier change (e.g. `0003` rewrites `hints.type` CHECK that `0002` had just extended), the earlier file stays — same principle as keeping git commits rather than rewriting history.
+
+### Form generalization
+`QuizForm` accepts `mode: 'create' | 'edit'`, `initialData`, and `onSave`. The create page passes `saveQuizAction`; the edit page passes `updateQuizAction.bind(null, id)` for partial application. One ~300-line component covers both screens.
+
+### Pattern C for jongsung rendering
+Each syllable on the play screen is a two-row cell: top row holds chosung / consonant+vowel / full syllable; bottom row reserves space for the jongsung jamo. Reserving the row even when no cell uses it prevents layout shifts between one-line and two-line modes mid-quiz.
+
+---
+
+## Local development
 
 ```bash
-# 1. 의존성 설치
+git clone https://github.com/TMUKeria/chosung_quiz.git
+cd chosung_quiz
 npm install
-
-# 2. 환경변수 설정
 cp .env.local.example .env.local
-# .env.local 파일을 열어 Supabase URL/anon key를 채워 넣기
-
-# 3. 개발 서버 실행
+# Fill NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
 npm run dev
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000) 열기.
+Supabase setup:
+1. Create a project at https://supabase.com
+2. Run each file in `supabase/migrations/` in order via the dashboard SQL editor
+3. Authentication → Providers → Email → turn off **Confirm email** (this app uses synchronous signup)
+4. Copy Project URL and anon key into `.env.local`
 
-## 📁 폴더 구조
+---
 
-```
-src/
-├── app/                  Next.js App Router 페이지
-├── components/           재사용 UI 컴포넌트
-├── lib/
-│   ├── supabase/
-│   │   ├── client.ts     브라우저용 Supabase 클라이언트
-│   │   └── server.ts     서버용 Supabase 클라이언트
-│   └── utils/
-│       └── hangul.ts     한글 → 초성 변환 유틸
-└── proxy.ts              Supabase 세션 갱신 (Next.js 16 컨벤션)
-```
+## Roadmap
 
-## 🎯 학습/포트폴리오 포인트
-
-- **접근성/포용적 디자인** — 특수아동 수업 맥락에서의 UX 결정
-- **한글 유니코드 직접 처리** — 라이브러리 없이 자모 분리 구현
-- **Supabase RLS** — 행 단위 접근 제어 정책 설계
-- **Next.js 16 신규 컨벤션** — `proxy.ts` (구 `middleware.ts`)
-
-## 📜 라이선스
-
-개인 학습/포트폴리오용 프로젝트.
+- [ ] Image hints via Supabase Storage
+- [ ] AI-assisted quiz generation (Claude API)
+- [ ] Modal-based confirms (replacing `window.confirm()`)
+- [ ] Re-enable email confirmation + add a captcha for production hardening
