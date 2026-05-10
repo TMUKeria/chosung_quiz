@@ -42,8 +42,8 @@
 | 정답 표시 | 텍스트만 (이펙트/애니메이션 없음 — 특수아동 자극 최소화) |
 | 수정/삭제 | 둘 다 가능 |
 | 공유 기능 | ❌ v1에서는 본인 퀴즈만 |
-| 발표 모드 | 풀스크린 + 큰 글자 + 고대비 |
-| 카테고리 | 문제마다 자유 입력 (선택). 발표 모드 시작 시 학생에게 첫 힌트로 항상 표시 |
+| 퀴즈 풀기 모드 | 풀스크린 + 큰 글자 + 고대비. UI 라벨은 "퀴즈 풀기" (`/play/:id`) |
+| 카테고리 | 문제마다 자유 입력 (선택). 퀴즈 풀기 시작 시 학생에게 첫 힌트로 항상 표시 |
 | 타이머 | ❌ 없음 |
 
 ---
@@ -61,7 +61,7 @@ questions
   id          uuid pk
   quiz_set_id uuid fk -> quiz_sets
   answer      text       -- 정답 단어 (초성은 클라이언트에서 자동 계산)
-  category    text?      -- 선택. 발표 모드 시작 시 학생에게 첫 힌트로 표시
+  category    text?      -- 선택. 퀴즈 풀기 모드 시작 시 학생에게 첫 힌트로 표시
   order       int
 
 hints
@@ -80,7 +80,7 @@ hints
 > **DB 마이그레이션 메모**: PR #4(quiz creation form)에 두 개의 마이그레이션 파일이 들어감.
 > - `0002_quiz_creation_form_support.sql`
 >   1. `hints.type` CHECK 확장 — `reveal_vowel` 추가 (PR #2 시점엔 `'text' | 'image' | 'reveal_jamo'`만 허용했음).
->   2. `questions.category` 컬럼 추가 — nullable text. 발표 모드 시작 시 학생에게 첫 힌트로 표시.
+>   2. `questions.category` 컬럼 추가 — nullable text. 퀴즈 풀기 시작 시 학생에게 첫 힌트로 표시.
 > - `0003_replace_reveal_jamo_with_syllable_hints.sql`
 >   1. `hints.type` CHECK 재구성 — `reveal_jamo` 제거 + `reveal_jongsung` / `reveal_syllable` 추가. 단편 자모 공개를 빼고 "음절 부분/전체 공개" 3종(받침/모음/글자)으로 통일.
 
@@ -106,9 +106,16 @@ export function toChosung(text: string): string {
 
 라이브러리 안 쓰고 직접 구현하는 이유: 한글 유니코드 구조 학습 + 면접 토픽.
 
-### 음절 부분/전체 공개용 추가 함수 (PR #7 발표 모드에서 구현 예정)
+### 음절 부분/전체 공개용 추가 함수 (PR #6에서 구현됨)
 
-발표 모드에서 정답의 특정 글자만 골라서 ① 받침만 / ② 자음+모음 / ③ 글자 통째 로 화면에 그릴 수 있어야 함. 한글 음절을 초성·중성·종성으로 분해/재결합하는 헬퍼들이 필요. 정확한 시그니처와 받침 인라인 표시 방식(자모 나열 / 괄호 / 분리 영역)은 PR #7 시작 시 같이 결정.
+퀴즈 풀기 모드에서 정답의 특정 글자를 ① 받침만 / ② 자음+모음 / ③ 글자 통째 로 인라인 결합해 화면에 그림.
+
+```ts
+export function getJongsung(syllable: string): string | null  // 받침 자모 또는 null
+export function removeJongsung(syllable: string): string       // 자음+모음 결합 음절 (받침 제거)
+```
+
+받침 인라인 표시 방식 = **위/아래 분리 영역 (C 패턴)**. 초성/자음+모음/글자 통째는 한 줄에 결합, 받침은 글자 아래 별도 줄에 표시. 출렁임 방지를 위해 어떤 음절이라도 받침 표시 중이면 모든 셀에 받침 영역을 reserve.
 
 ---
 
@@ -162,13 +169,11 @@ src/
 
 1. `chore: scaffold next.js 16 + supabase` — 초기 셋업 ✅
 2. `feat: db schema for quiz sets and questions` — Supabase 스키마 + RLS ✅
-   (※ 모음 힌트는 PR #4에 묶어 `hints.type` CHECK 확장 마이그레이션 진행)
-3. `feat: teacher auth` — 선생님 로그인
-4. `feat: quiz creation form` — 단어 입력 → 자동 초성 변환 + **모음 힌트 토글** + `hints.type` CHECK 마이그레이션(`reveal_vowel` 추가)
-5. `feat: quiz list & edit & delete` — 관리 페이지
-6. `feat: presentation mode` — 수업용 풀스크린(**핵심 차별화**) + **헤더 `?` 가이드 모달 골격**
-7. `feat: hint reveal & answer reveal` — 힌트/정답 토글 + `reveal_vowel` 처리(`revealVowelAt` 사용)
-8. `docs: README with demo link` — 포트폴리오 마무리 + 가이드 모달 페이지별 콘텐츠 마무리
+3. `feat: teacher auth` — 선생님 로그인 ✅
+4. `feat: quiz creation form` — 단어 입력 → 자동 초성 변환 + 카테고리 + 음절 힌트 + `hints.type` 마이그레이션 ✅
+5. `feat: quiz list & edit & delete` — 관리 페이지 ✅
+6. `feat: play mode + guide + rename` — 퀴즈 풀기 풀스크린(**핵심 차별화**) + 음절 힌트 인라인 reveal(C 패턴) + react-joyride spotlight 가이드 + "발표"→"퀴즈 풀기" 명칭 정리
+7. `docs: README with demo link` — 포트폴리오 마무리
 
 ---
 
@@ -187,8 +192,8 @@ src/
 - 콘텐츠는 한국어 짧은 글머리표 (선생님이 1분 안에 훑을 분량).
 - 페이지별 콘텐츠:
   - **만들기**(`/admin/new`): "정답 입력 → 자동 초성 변환 / 카테고리 입력 / [+ 힌트] 버튼 (텍스트 / 받침 / 모음 / 글자 전체 중 선택) → 글자 인덱스 선택"
-  - **목록**(`/admin`): "퀴즈 클릭 → 발표 모드 / 수정 / 삭제"
-  - **발표**(`/play/:id`): "(첫 화면에 카테고리 자동 표시) / 다음 힌트 / 정답 확인 / 다음 문제 / 풀스크린 토글"
+  - **목록**(`/admin`): "퀴즈 클릭 → 퀴즈 풀기 / 수정 / 삭제"
+  - **퀴즈 풀기**(`/play/:id`): "(첫 화면에 카테고리 자동 표시) / 다음 힌트 / 정답 확인 / 다음 문제 / 풀스크린 토글"
 - 컴포넌트: `<HelpButton />` (헤더에 배치) + `<HelpModal page="...">` (페이지 prop으로 분기).
 - 접근성: ESC 닫힘, 포커스 트랩, `aria-modal="true"`, 스크린리더용 라벨.
 
