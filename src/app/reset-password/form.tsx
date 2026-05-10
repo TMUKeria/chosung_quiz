@@ -1,28 +1,23 @@
 'use client'
 
 import { useActionState } from 'react'
-import { signupAction, type SignupActionState } from './actions'
+import {
+  resetPasswordAction,
+  type ResetPasswordActionState,
+} from './actions'
 
-const initialState: SignupActionState = { error: null }
+const initialState: ResetPasswordActionState = { error: null }
 
-export function SignupForm() {
-  const [state, formAction, isPending] = useActionState(signupAction, initialState)
+export function ResetPasswordForm() {
+  const [state, formAction, isPending] = useActionState(
+    resetPasswordAction,
+    initialState,
+  )
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">이메일</span>
-        <input
-          type="email"
-          name="email"
-          required
-          autoComplete="email"
-          className="rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">비밀번호</span>
+        <span className="font-medium">새 비밀번호</span>
         <input
           type="password"
           name="password"
@@ -35,7 +30,7 @@ export function SignupForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">비밀번호 확인</span>
+        <span className="font-medium">새 비밀번호 확인</span>
         <input
           type="password"
           name="confirmPassword"
@@ -58,7 +53,7 @@ export function SignupForm() {
         disabled={isPending}
         className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {isPending ? '가입 중...' : '가입하기'}
+        {isPending ? '변경 중...' : '비밀번호 변경'}
       </button>
     </form>
   )

@@ -1,5 +1,7 @@
 # 초성 퀴즈 — Korean Initial Consonant Quiz for the Classroom
 
+[![Release](https://img.shields.io/github/v/release/TMUKeria/chosung_quiz?label=release&color=blue)](https://github.com/TMUKeria/chosung_quiz/releases)
+
 [한국어로 보기 →](README.ko.md)
 
 A web tool for Korean teachers to author and run **chosung** (initial-consonant) quizzes during class. Designed around the inclusive-education context — special-needs students see a clean, fullscreen, high-contrast play screen with no timers, no input, and no distracting effects.
