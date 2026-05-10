@@ -2,12 +2,51 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { Joyride, STATUS, type EventData, type Step } from 'react-joyride'
 import { toChosung, splitHangulSyllables, hasJongsung } from '@/lib/utils/hangul'
 import type {
   HintType,
   SaveQuizInput,
   SaveQuizResult,
 } from './quiz-form-types'
+
+const TOUR_STORAGE_KEY = 'chosung-quiz-create-tour-seen'
+
+const TOUR_STEPS: Step[] = [
+  {
+    target: '[data-tour="quiz-title"]',
+    content: '먼저 퀴즈 세트의 제목을 입력하세요. 예: "음식 초성 퀴즈".',
+  },
+  {
+    target: '[data-tour="answer-input"]',
+    content: '정답 단어를 입력하면 자동으로 초성 미리보기가 표시돼요.',
+  },
+  {
+    target: '[data-tour="category-input"]',
+    content:
+      '카테고리는 선택입니다. 입력하면 퀴즈 풀기 화면에서 학생들에게 첫 힌트로 항상 보여요.',
+  },
+  {
+    target: '[data-tour="add-hint"]',
+    content:
+      '힌트는 4종류 중 고를 수 있어요: 텍스트 / 받침 공개 / 모음 공개 / 글자 전체. 종류를 고른 뒤 정답의 어떤 글자를 공개할지 선택해요.',
+  },
+  {
+    target: '[data-tour="add-question"]',
+    content: '문제를 더 추가할 수 있어요. 한 퀴즈 세트에 여러 문제 가능.',
+  },
+  {
+    target: '[data-tour="save"]',
+    content: '저장하면 홈 화면에 카드가 추가되고, 퀴즈 풀기로 바로 진행할 수 있어요.',
+  },
+]
+
+const TOUR_LOCALE = {
+  next: '다음',
+  back: '이전',
+  skip: '건너뛰기',
+  last: '완료',
+}
 
 type Hint = {
   id: string
@@ -87,6 +126,24 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [runTour, setRunTour] = useState(false)
+
+  useEffect(() => {
+    if (mode !== 'create') return
+    if (typeof window === 'undefined') return
+    if (localStorage.getItem(TOUR_STORAGE_KEY)) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRunTour(true)
+  }, [mode])
+
+  const handleTourCallback = (data: EventData) => {
+    if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
+      localStorage.setItem(TOUR_STORAGE_KEY, 'true')
+      setRunTour(false)
+    }
+  }
+
+  const startTour = () => setRunTour(true)
 
   const setTitle = (next: string) => {
     setTitleState(next)
@@ -178,15 +235,36 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <button
-        type="button"
-        onClick={handleBack}
-        className="self-start text-sm text-gray-500 hover:underline"
-      >
-        ← 홈으로
-      </button>
+      <Joyride
+        steps={TOUR_STEPS}
+        run={runTour}
+        continuous
+        locale={TOUR_LOCALE}
+        onEvent={handleTourCallback}
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="text-sm text-gray-500 hover:underline"
+        >
+          ← 홈으로
+        </button>
+        <button
+          type="button"
+          onClick={startTour}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 text-base text-gray-600 hover:bg-gray-50"
+          aria-label="가이드 보기"
+        >
+          ?
+        </button>
+      </div>
+
+      <label
+        data-tour="quiz-title"
+        className="flex flex-col gap-1 text-sm"
+      >
         <span className="font-medium">퀴즈 제목</span>
         <input
           type="text"
@@ -215,6 +293,7 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
       <button
         type="button"
         onClick={addQuestion}
+        data-tour="add-question"
         className="rounded border border-dashed border-gray-400 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
       >
         + 문제 추가
@@ -230,6 +309,7 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
         type="button"
         onClick={handleSave}
         disabled={isPending}
+        data-tour="save"
         className="rounded bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isPending ? submitPendingLabel : submitLabel}
@@ -276,7 +356,7 @@ function QuestionCard({
         )}
       </div>
 
-      <div className="mb-3 flex flex-col gap-1 text-sm">
+      <div data-tour="answer-input" className="mb-3 flex flex-col gap-1 text-sm">
         <span className="font-medium">정답</span>
         <input
           type="text"
@@ -293,7 +373,7 @@ function QuestionCard({
         )}
       </div>
 
-      <div className="mb-3 flex flex-col gap-1 text-sm">
+      <div data-tour="category-input" className="mb-3 flex flex-col gap-1 text-sm">
         <span className="font-medium">카테고리 (선택)</span>
         <input
           type="text"
@@ -322,6 +402,7 @@ function QuestionCard({
         <button
           type="button"
           onClick={onAddHint}
+          data-tour="add-hint"
           className="self-start rounded border border-dashed border-gray-400 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
         >
           + 힌트 추가

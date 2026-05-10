@@ -42,7 +42,7 @@ export function QuizCard({ id, title, questionCount, createdAt }: QuizCardProps)
           href={`/play/${id}`}
           className="flex-1 rounded bg-blue-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-blue-700"
         >
-          발표
+          퀴즈 풀기
         </Link>
         <Link
           href={`/admin/edit/${id}`}

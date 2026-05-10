@@ -3,9 +3,17 @@ const CHOSUNG = [
   'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
 ] as const
 
+const JONGSUNG = [
+  '', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ',
+  'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ',
+  'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ',
+  'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ',
+] as const
+
 const HANGUL_BASE = 0xac00
 const HANGUL_LAST = 0xd7a3
 const CHOSUNG_BLOCK = 588
+const JUNGSUNG_BLOCK = 28
 
 export function toChosung(text: string): string {
   return [...text]
@@ -38,5 +46,21 @@ export function splitHangulSyllables(text: string): string[] {
 export function hasJongsung(syllable: string): boolean {
   const code = syllable.charCodeAt(0)
   if (code < HANGUL_BASE || code > HANGUL_LAST) return false
-  return (code - HANGUL_BASE) % 28 !== 0
+  return (code - HANGUL_BASE) % JUNGSUNG_BLOCK !== 0
+}
+
+export function getJongsung(syllable: string): string | null {
+  const code = syllable.charCodeAt(0)
+  if (code < HANGUL_BASE || code > HANGUL_LAST) return null
+  const jongIdx = (code - HANGUL_BASE) % JUNGSUNG_BLOCK
+  if (jongIdx === 0) return null
+  return JONGSUNG[jongIdx]
+}
+
+export function removeJongsung(syllable: string): string {
+  const code = syllable.charCodeAt(0)
+  if (code < HANGUL_BASE || code > HANGUL_LAST) return syllable
+  const jongIdx = (code - HANGUL_BASE) % JUNGSUNG_BLOCK
+  if (jongIdx === 0) return syllable
+  return String.fromCharCode(code - jongIdx)
 }
