@@ -24,27 +24,36 @@ type SyllableState = {
 
 const REVEAL_TYPES = new Set(['reveal_jongsung', 'reveal_vowel', 'reveal_syllable'])
 
+function parseIndices(content: string): number[] {
+  if (!content) return []
+  return content
+    .split(',')
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !Number.isNaN(n))
+}
+
 function applyHintsToSyllables(
   syllableCount: number,
   hints: Hint[],
-  revealed: Set<number>,
+  revealedCells: Set<string>,
 ): SyllableState[] {
   const states: SyllableState[] = Array.from({ length: syllableCount }, () => ({
     level: 'chosung',
     showJongsung: false,
   }))
   for (let i = 0; i < hints.length; i++) {
-    if (!revealed.has(i)) continue
     const h = hints[i]
     if (!REVEAL_TYPES.has(h.type)) continue
-    const idx = parseInt(h.content, 10)
-    if (Number.isNaN(idx) || idx < 0 || idx >= states.length) continue
-    if (h.type === 'reveal_jongsung') {
-      states[idx].showJongsung = true
-    } else if (h.type === 'reveal_vowel') {
-      if (states[idx].level === 'chosung') states[idx].level = 'vowel'
-    } else if (h.type === 'reveal_syllable') {
-      states[idx].level = 'full'
+    for (const idx of parseIndices(h.content)) {
+      if (!revealedCells.has(`${i}:${idx}`)) continue
+      if (idx < 0 || idx >= states.length) continue
+      if (h.type === 'reveal_jongsung') {
+        states[idx].showJongsung = true
+      } else if (h.type === 'reveal_vowel') {
+        if (states[idx].level === 'chosung') states[idx].level = 'vowel'
+      } else if (h.type === 'reveal_syllable') {
+        states[idx].level = 'full'
+      }
     }
   }
   return states
@@ -71,15 +80,6 @@ function renderSyllable(
   return { top, bottom }
 }
 
-function hintLabel(hint: Hint): string {
-  if (hint.type === 'text') return '텍스트 힌트'
-  const idx = parseInt(hint.content, 10)
-  if (hint.type === 'reveal_jongsung') return `받침: ${idx + 1}번째`
-  if (hint.type === 'reveal_vowel') return `모음: ${idx + 1}번째`
-  if (hint.type === 'reveal_syllable') return `글자: ${idx + 1}번째`
-  return hint.type
-}
-
 export function PlayClient({
   title,
   questions,
@@ -88,7 +88,8 @@ export function PlayClient({
   questions: Question[]
 }) {
   const [currentIdx, setCurrentIdx] = useState(0)
-  const [revealedHints, setRevealedHints] = useState<Set<number>>(new Set())
+  // 각 (힌트, 글자) 셀이 공개됐는지 추적. 키 = "hintIdx:syllableIdx" 또는 "hintIdx:text".
+  const [revealedCells, setRevealedCells] = useState<Set<string>>(new Set())
   const [showAnswer, setShowAnswer] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
@@ -102,7 +103,7 @@ export function PlayClient({
   const current = questions[currentIdx]
 
   const resetQuestionState = () => {
-    setRevealedHints(new Set())
+    setRevealedCells(new Set())
     setShowAnswer(false)
   }
 
@@ -121,11 +122,11 @@ export function PlayClient({
     resetQuestionState()
   }
 
-  const toggleHint = (i: number) => {
-    setRevealedHints((prev) => {
+  const toggleCell = (cellKey: string) => {
+    setRevealedCells((prev) => {
       const next = new Set(prev)
-      if (next.has(i)) next.delete(i)
-      else next.add(i)
+      if (next.has(cellKey)) next.delete(cellKey)
+      else next.add(cellKey)
       return next
     })
   }
@@ -184,12 +185,14 @@ export function PlayClient({
   const syllableStates = applyHintsToSyllables(
     syllables.length,
     current.hints,
-    revealedHints,
+    revealedCells,
   )
 
   const textHintsToShow = current.hints
     .map((h, i) => ({ hint: h, idx: i }))
-    .filter(({ hint, idx }) => hint.type === 'text' && revealedHints.has(idx))
+    .filter(
+      ({ hint, idx }) => hint.type === 'text' && revealedCells.has(`${idx}:text`),
+    )
     .map(({ hint }) => hint.content)
 
   return (
@@ -238,24 +241,53 @@ export function PlayClient({
             힌트 (눌러서 공개)
           </span>
           <div className="flex flex-wrap justify-center gap-2">
-            {current.hints.map((h, i) => {
-              const active = revealedHints.has(i)
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => toggleHint(i)}
-                  disabled={showAnswer}
-                  className={[
-                    'rounded border px-3 py-2 text-sm transition disabled:opacity-30',
-                    active
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50',
-                  ].join(' ')}
-                >
-                  {hintLabel(h)}
-                </button>
-              )
+            {current.hints.flatMap((h, i) => {
+              if (h.type === 'text') {
+                const cellKey = `${i}:text`
+                const active = revealedCells.has(cellKey)
+                return [
+                  <button
+                    key={cellKey}
+                    type="button"
+                    onClick={() => toggleCell(cellKey)}
+                    disabled={showAnswer}
+                    className={[
+                      'rounded border px-3 py-2 text-sm transition disabled:opacity-30',
+                      active
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50',
+                    ].join(' ')}
+                  >
+                    텍스트 힌트
+                  </button>,
+                ]
+              }
+              const typeLabel =
+                h.type === 'reveal_jongsung'
+                  ? '받침'
+                  : h.type === 'reveal_vowel'
+                    ? '모음'
+                    : '글자'
+              return parseIndices(h.content).map((idx) => {
+                const cellKey = `${i}:${idx}`
+                const active = revealedCells.has(cellKey)
+                return (
+                  <button
+                    key={cellKey}
+                    type="button"
+                    onClick={() => toggleCell(cellKey)}
+                    disabled={showAnswer}
+                    className={[
+                      'rounded border px-3 py-2 text-sm transition disabled:opacity-30',
+                      active
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50',
+                    ].join(' ')}
+                  >
+                    {typeLabel}: {idx + 1}번째
+                  </button>
+                )
+              })
             })}
           </div>
         </section>
