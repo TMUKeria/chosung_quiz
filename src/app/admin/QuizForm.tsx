@@ -16,28 +16,34 @@ const TOUR_STEPS: Step[] = [
   {
     target: '[data-tour="quiz-title"]',
     content: '먼저 퀴즈 세트의 제목을 입력하세요. 예: "음식 초성 퀴즈".',
+    skipBeacon: true,
   },
   {
     target: '[data-tour="answer-input"]',
     content: '정답 단어를 입력하면 자동으로 초성 미리보기가 표시돼요.',
+    skipBeacon: true,
   },
   {
     target: '[data-tour="category-input"]',
     content:
       '카테고리는 선택입니다. 입력하면 퀴즈 풀기 화면에서 학생들에게 첫 힌트로 항상 보여요.',
+    skipBeacon: true,
   },
   {
     target: '[data-tour="add-hint"]',
     content:
-      '힌트는 4종류 중 고를 수 있어요: 텍스트 / 받침 공개 / 모음 공개 / 글자 전체. 종류를 고른 뒤 정답의 어떤 글자를 공개할지 선택해요.',
+      '힌트는 4종류: 텍스트 / 받침 / 모음 / 글자 전체. 종류를 고른 뒤 정답의 어떤 글자를 공개할지 chip을 눌러 직접 선택해야 힌트가 완성됩니다. 한 힌트에 여러 글자를 선택하면 퀴즈 풀기 화면에서 클릭마다 하나씩 차례로 공개돼요.',
+    skipBeacon: true,
   },
   {
     target: '[data-tour="add-question"]',
     content: '문제를 더 추가할 수 있어요. 한 퀴즈 세트에 여러 문제 가능.',
+    skipBeacon: true,
   },
   {
     target: '[data-tour="save"]',
     content: '저장하면 홈 화면에 카드가 추가되고, 퀴즈 풀기로 바로 진행할 수 있어요.',
+    skipBeacon: true,
   },
 ]
 
@@ -84,6 +90,16 @@ const HINT_TYPE_LABELS: Record<HintType, string> = {
 }
 
 const REVEAL_TYPES: HintType[] = ['reveal_jongsung', 'reveal_vowel', 'reveal_syllable']
+
+function parseSelectedIndices(content: string): Set<number> {
+  if (!content) return new Set()
+  return new Set(
+    content
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !Number.isNaN(n)),
+  )
+}
 
 const newHint = (): Hint => ({ id: crypto.randomUUID(), type: 'text', content: '' })
 
@@ -241,6 +257,7 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
         continuous
         locale={TOUR_LOCALE}
         onEvent={handleTourCallback}
+        beaconComponent={() => null}
       />
 
       <div className="flex items-center justify-between">
@@ -497,15 +514,24 @@ function HintRow({
 
       {isReveal && syllables.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-8">
-          <span className="text-xs text-gray-500">공개할 글자:</span>
+          <span className="text-xs text-gray-500">
+            공개할 글자 (여러 개 선택 가능):
+          </span>
           {syllables.map((sy, i) => {
-            const isSelected = hint.content === String(i)
+            const selectedIndices = parseSelectedIndices(hint.content)
+            const isSelected = selectedIndices.has(i)
             const disabled = hint.type === 'reveal_jongsung' && !hasJongsung(sy)
             return (
               <button
                 key={i}
                 type="button"
-                onClick={() => onUpdate({ content: String(i) })}
+                onClick={() => {
+                  const next = new Set(selectedIndices)
+                  if (next.has(i)) next.delete(i)
+                  else next.add(i)
+                  const sorted = [...next].sort((a, b) => a - b).join(',')
+                  onUpdate({ content: sorted })
+                }}
                 disabled={disabled}
                 title={disabled ? '받침이 없어 선택할 수 없어요' : undefined}
                 className={[
