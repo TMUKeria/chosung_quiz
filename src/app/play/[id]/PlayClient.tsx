@@ -219,20 +219,18 @@ export function PlayClient({
     )
     .map(({ hint }) => hint.content)
 
-  // image_intro hints are pinned: shown from the start, no reveal button.
-  const introImageUrls = current.hints
-    .filter((h) => h.type === 'image_intro' && h.imageUrl)
-    .map((h) => h.imageUrl as string)
-
-  // image hints behave like text hints — revealed only after the teacher clicks.
-  const revealedImageUrls = current.hints
+  // Images shown above the answer glyphs: image_intro is always pinned;
+  // image becomes visible only after the teacher clicks its reveal button.
+  // Preserve the hint authoring order so a teacher who interleaves the two
+  // sees the layout they designed.
+  const topImageUrls = current.hints
     .map((h, i) => ({ hint: h, idx: i }))
-    .filter(
-      ({ hint, idx }) =>
-        hint.type === 'image' &&
-        hint.imageUrl &&
-        revealedCells.has(`${idx}:image`),
-    )
+    .filter(({ hint, idx }) => {
+      if (!hint.imageUrl) return false
+      if (hint.type === 'image_intro') return true
+      if (hint.type === 'image') return revealedCells.has(`${idx}:image`)
+      return false
+    })
     .map(({ hint }) => hint.imageUrl as string)
 
   return (
@@ -254,14 +252,14 @@ export function PlayClient({
           </p>
         )}
 
-        {introImageUrls.length > 0 && (
+        {topImageUrls.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-4">
-            {introImageUrls.map((url, i) => (
+            {topImageUrls.map((url, i) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={i}
                 src={url}
-                alt={`도입 이미지 ${i + 1}`}
+                alt={`힌트 이미지 ${i + 1}`}
                 className="max-h-[35vh] max-w-[45vw] rounded border border-gray-200 object-contain"
               />
             ))}
@@ -290,20 +288,6 @@ export function PlayClient({
               <li key={i}>{t}</li>
             ))}
           </ul>
-        )}
-
-        {revealedImageUrls.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            {revealedImageUrls.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={url}
-                alt={`힌트 이미지 ${i + 1}`}
-                className="max-h-[35vh] max-w-[45vw] rounded border border-gray-200 object-contain"
-              />
-            ))}
-          </div>
         )}
       </section>
 
