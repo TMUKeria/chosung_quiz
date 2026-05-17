@@ -27,7 +27,7 @@ const REVEAL_TYPES = new Set(['reveal_jongsung', 'reveal_vowel', 'reveal_syllabl
 const FONT_SIZE_STORAGE_KEY = 'chosung-quiz-play-font-size'
 const FONT_SIZE_DEFAULT = 8 // rem (≈ Tailwind text-9xl)
 const FONT_SIZE_MIN = 4
-const FONT_SIZE_MAX = 16
+const FONT_SIZE_MAX = 25
 const FONT_SIZE_STEP = 0.5
 const JONGSUNG_SIZE_RATIO = 0.5
 

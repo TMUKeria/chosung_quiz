@@ -5,7 +5,7 @@
 선생님이 교실 환경(모니터 크기, 학생 시력, 자리 배치)에 맞춰 퀴즈 풀기
 화면의 정답 글자 크기를 **실시간으로 자유롭게 조정**할 수 있도록.
 
-- 슬라이더(range input)로 4rem ~ 16rem 사이 자유 값
+- 슬라이더(range input)로 4rem ~ 25rem 사이 자유 값
 - 즉시 화면 반영 — 슬라이더가 곧 미리보기
 - localStorage로 기억 (다음 수업 시 같은 크기로 자동 복원)
 - "기본값" 버튼으로 한 번에 8rem 복귀
@@ -20,7 +20,7 @@
 const FONT_SIZE_STORAGE_KEY = 'chosung-quiz-play-font-size'
 const FONT_SIZE_DEFAULT = 8   // rem (≈ Tailwind text-9xl)
 const FONT_SIZE_MIN = 4
-const FONT_SIZE_MAX = 16
+const FONT_SIZE_MAX = 25
 const FONT_SIZE_STEP = 0.5
 const JONGSUNG_SIZE_RATIO = 0.5  // 받침 줄은 메인 글자의 50%
 ```

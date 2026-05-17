@@ -5,7 +5,7 @@
 Teachers can now resize the answer text on the play screen in real time
 to match their classroom (monitor size, student vision, seating layout).
 
-- Range input from 4rem to 16rem (step 0.5)
+- Range input from 4rem to 25rem (step 0.5)
 - Instant on-screen feedback — the slider *is* the preview
 - Remembered via localStorage (next lesson restores the last size)
 - "기본값" (default) button to snap back to 8rem
@@ -18,7 +18,7 @@ to match their classroom (monitor size, student vision, seating layout).
 const FONT_SIZE_STORAGE_KEY = 'chosung-quiz-play-font-size'
 const FONT_SIZE_DEFAULT = 8   // rem (≈ Tailwind text-9xl)
 const FONT_SIZE_MIN = 4
-const FONT_SIZE_MAX = 16
+const FONT_SIZE_MAX = 25
 const FONT_SIZE_STEP = 0.5
 const JONGSUNG_SIZE_RATIO = 0.5  // jongsung row is 50% of the main glyph
 ```
