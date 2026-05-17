@@ -24,6 +24,13 @@ type SyllableState = {
 
 const REVEAL_TYPES = new Set(['reveal_jongsung', 'reveal_vowel', 'reveal_syllable'])
 
+const FONT_SIZE_STORAGE_KEY = 'chosung-quiz-play-font-size'
+const FONT_SIZE_DEFAULT = 8 // rem (≈ Tailwind text-9xl)
+const FONT_SIZE_MIN = 4
+const FONT_SIZE_MAX = 25
+const FONT_SIZE_STEP = 0.5
+const JONGSUNG_SIZE_RATIO = 0.5
+
 function parseIndices(content: string): number[] {
   if (!content) return []
   return content
@@ -93,12 +100,29 @@ export function PlayClient({
   const [showAnswer, setShowAnswer] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [fontSize, setFontSize] = useState(FONT_SIZE_DEFAULT)
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement)
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = localStorage.getItem(FONT_SIZE_STORAGE_KEY)
+    if (!stored) return
+    const parsed = parseFloat(stored)
+    if (Number.isNaN(parsed)) return
+    const clamped = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, parsed))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFontSize(clamped)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(fontSize))
+  }, [fontSize])
 
   const current = questions[currentIdx]
 
@@ -215,7 +239,10 @@ export function PlayClient({
         )}
 
         {showAnswer ? (
-          <div className="text-7xl font-extrabold tracking-widest sm:text-9xl">
+          <div
+            className="font-extrabold tracking-widest"
+            style={{ fontSize: `${fontSize}rem`, lineHeight: 1.1 }}
+          >
             {current.answer}
           </div>
         ) : (
@@ -223,6 +250,7 @@ export function PlayClient({
             answer={current.answer}
             syllables={syllables}
             states={syllableStates}
+            fontSize={fontSize}
           />
         )}
 
@@ -293,6 +321,33 @@ export function PlayClient({
         </section>
       )}
 
+      <section className="mb-3 flex flex-wrap items-center justify-center gap-3 text-sm text-gray-600">
+        <label htmlFor="font-size-slider" className="font-medium">
+          글자 크기
+        </label>
+        <input
+          id="font-size-slider"
+          type="range"
+          min={FONT_SIZE_MIN}
+          max={FONT_SIZE_MAX}
+          step={FONT_SIZE_STEP}
+          value={fontSize}
+          onChange={(e) => setFontSize(parseFloat(e.target.value))}
+          className="w-48"
+          aria-label="정답 글자 크기 조정"
+        />
+        <span className="w-16 text-right font-mono tabular-nums">
+          {fontSize.toFixed(1)} rem
+        </span>
+        <button
+          type="button"
+          onClick={() => setFontSize(FONT_SIZE_DEFAULT)}
+          className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+        >
+          기본값
+        </button>
+      </section>
+
       <footer className="flex flex-wrap items-center justify-center gap-2">
         <button
           type="button"
@@ -333,10 +388,12 @@ function SyllableDisplay({
   answer,
   syllables,
   states,
+  fontSize,
 }: {
   answer: string
   syllables: string[]
   states: SyllableState[]
+  fontSize: number
 }) {
   let syllableIdx = 0
   type Cell = { top: string; bottom: string | null; isSpace: boolean }
@@ -360,12 +417,18 @@ function SyllableDisplay({
   const reserveJongsungRow = cells.some((c) => c.bottom)
 
   return (
-    <div className="flex items-end justify-center gap-3 text-7xl font-extrabold tracking-wider sm:gap-4 sm:text-9xl">
+    <div
+      className="flex flex-wrap items-end justify-center gap-3 font-extrabold tracking-wider sm:gap-4"
+      style={{ fontSize: `${fontSize}rem`, lineHeight: 1.1 }}
+    >
       {cells.map((c, i) => (
         <div key={i} className="flex flex-col items-center">
           <span>{c.top}</span>
           {reserveJongsungRow && (
-            <span className="mt-1 text-4xl text-gray-700 sm:text-6xl">
+            <span
+              className="mt-1 text-gray-700"
+              style={{ fontSize: `${fontSize * JONGSUNG_SIZE_RATIO}rem`, lineHeight: 1 }}
+            >
               {c.bottom ?? ' '}
             </span>
           )}
