@@ -219,19 +219,24 @@ export function PlayClient({
     )
     .map(({ hint }) => hint.content)
 
-  // Images shown above the answer glyphs: image_intro is always pinned;
-  // image becomes visible only after the teacher clicks its reveal button.
-  // Preserve the hint authoring order so a teacher who interleaves the two
-  // sees the layout they designed.
-  const topImageUrls = current.hints
+  // Images shown above the answer glyphs. Layout intent:
+  //   [ intro #1 ] [ intro #2 ] ... [ revealed image #1 ] [ revealed image #2 ]
+  // Pinned image_intro keeps its left-side position so the row doesn't reflow
+  // when the teacher reveals an image mid-class; newly revealed images always
+  // slot in at the right edge.
+  const introImageUrls = current.hints
+    .filter((h) => h.type === 'image_intro' && h.imageUrl)
+    .map((h) => h.imageUrl as string)
+  const revealedImageUrls = current.hints
     .map((h, i) => ({ hint: h, idx: i }))
-    .filter(({ hint, idx }) => {
-      if (!hint.imageUrl) return false
-      if (hint.type === 'image_intro') return true
-      if (hint.type === 'image') return revealedCells.has(`${idx}:image`)
-      return false
-    })
+    .filter(
+      ({ hint, idx }) =>
+        hint.type === 'image' &&
+        hint.imageUrl &&
+        revealedCells.has(`${idx}:image`),
+    )
     .map(({ hint }) => hint.imageUrl as string)
+  const topImageUrls = [...introImageUrls, ...revealedImageUrls]
 
   return (
     <main className="flex min-h-screen flex-col bg-white p-6 text-black">
