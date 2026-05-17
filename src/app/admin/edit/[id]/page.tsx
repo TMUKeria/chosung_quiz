@@ -4,8 +4,14 @@ import { QuizForm } from '../../QuizForm'
 import type { HintType } from '../../quiz-form-types'
 import { updateQuizAction } from './actions'
 
+// Whitelist of hint types the form can render. Keep this in sync with the
+// HintType union — leaving a type out makes the edit page silently drop those
+// rows from initialData, which then orphan-cleans the matching Storage files
+// on the next save.
 const VALID_HINT_TYPES_FOR_FORM: HintType[] = [
   'text',
+  'image',
+  'image_intro',
   'reveal_jongsung',
   'reveal_vowel',
   'reveal_syllable',

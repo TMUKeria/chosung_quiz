@@ -1,5 +1,7 @@
 export type HintType =
   | 'text'
+  | 'image'
+  | 'image_intro'
   | 'reveal_jongsung'
   | 'reveal_vowel'
   | 'reveal_syllable'

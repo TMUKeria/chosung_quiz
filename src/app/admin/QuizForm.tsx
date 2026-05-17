@@ -9,6 +9,11 @@ import type {
   SaveQuizInput,
   SaveQuizResult,
 } from './quiz-form-types'
+import {
+  deleteHintImageAction,
+  uploadHintImageAction,
+} from './hint-image-actions'
+import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 
 const TOUR_STORAGE_KEY = 'chosung-quiz-create-tour-seen'
 
@@ -33,10 +38,18 @@ const TOUR_STEPS: Step[] = [
     target: '[data-tour="add-hint"]',
     content: (
       <div className="text-left text-sm leading-relaxed">
-        <p className="mb-2 font-semibold">힌트는 4종류예요 (정답이 「치킨」일 때):</p>
+        <p className="mb-2 font-semibold">힌트는 6종류예요 (정답이 「치킨」일 때):</p>
         <ul className="mb-3 space-y-1">
           <li>
             • <b>텍스트</b> — 직접 쓴 문장 힌트. 예: 「닭으로 만든 음식」
+          </li>
+          <li>
+            • <b>이미지 (눌러서 공개)</b> — 사진 1장 업로드. 수업 중 버튼을
+            누르면 학생 화면에 나타나요.
+          </li>
+          <li>
+            • <b>이미지 (시작부터 공개)</b> — 사진 1장 업로드. 문제 시작과
+            동시에 카테고리 옆에 항상 보여요. 카테고리처럼 도입용.
           </li>
           <li>
             • <b>받침</b> — 그 글자의 받침만 공개. 예: 「친」의 받침 「ㄴ」
@@ -49,9 +62,9 @@ const TOUR_STEPS: Step[] = [
           </li>
         </ul>
         <p>
-          타입을 고른 뒤 chip(글자 버튼)으로 어떤 글자를 공개할지 직접
+          받침/모음/글자는 chip(글자 버튼)으로 어떤 글자를 공개할지 직접
           선택하세요. 한 힌트에 여러 글자를 고르면 퀴즈 풀기에서 클릭마다
-          하나씩 차례로 공개돼요.
+          하나씩 차례로 공개돼요. 이미지는 5MB 이하 (JPG/PNG/WebP/GIF).
         </p>
       </div>
     ),
@@ -106,12 +119,15 @@ export type QuizFormProps = {
 
 const HINT_TYPE_LABELS: Record<HintType, string> = {
   text: '텍스트',
+  image: '이미지 (눌러서 공개)',
+  image_intro: '이미지 (시작부터 공개)',
   reveal_jongsung: '받침 공개',
   reveal_vowel: '모음 공개 (받침 가림)',
   reveal_syllable: '글자 전체 공개',
 }
 
 const REVEAL_TYPES: HintType[] = ['reveal_jongsung', 'reveal_vowel', 'reveal_syllable']
+const IMAGE_TYPES: HintType[] = ['image', 'image_intro']
 
 function parseSelectedIndices(content: string): Set<number> {
   if (!content) return new Set()
@@ -470,6 +486,15 @@ function HintRow({
   onMoveDown: () => void
 }) {
   const isReveal = REVEAL_TYPES.includes(hint.type)
+  const isImage = IMAGE_TYPES.includes(hint.type)
+
+  const handleTypeChange = (nextType: HintType) => {
+    // Switching away from an image hint leaves its file orphaned in Storage
+    // until the user explicitly saves — we let the orphan-cleanup pass on save
+    // handle it rather than racing a delete here (the new type's content is ''
+    // and the saved set won't reference the old path).
+    onUpdate({ type: nextType, content: '' })
+  }
 
   return (
     <div className="rounded border border-gray-200 p-2 text-sm">
@@ -477,9 +502,7 @@ function HintRow({
         <span className="w-6 text-gray-500">{index + 1}.</span>
         <select
           value={hint.type}
-          onChange={(e) =>
-            onUpdate({ type: e.target.value as HintType, content: '' })
-          }
+          onChange={(e) => handleTypeChange(e.target.value as HintType)}
           className="rounded border border-gray-300 px-2 py-1"
         >
           {(Object.keys(HINT_TYPE_LABELS) as HintType[]).map((t) => (
@@ -497,6 +520,10 @@ function HintRow({
             placeholder="예: 닭으로 만든 음식"
             className="flex-1 rounded border border-gray-300 px-2 py-1"
           />
+        )}
+
+        {isImage && (
+          <ImageHintEditor hint={hint} onUpdate={onUpdate} />
         )}
 
         {isReveal && syllables.length === 0 && (
@@ -569,6 +596,145 @@ function HintRow({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
+
+function ImageHintEditor({
+  hint,
+  onUpdate,
+}: {
+  hint: Hint
+  onUpdate: (patch: Partial<Hint>) => void
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isBusy, setIsBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // When the hint already has a stored path (e.g. edit mode), fetch a short-
+  // lived signed URL so the thumbnail can render. RLS guarantees we only get
+  // URLs for files in the current teacher's folder.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!hint.content) {
+        setPreviewUrl(null)
+        return
+      }
+      // Skip if previewUrl was just set optimistically from a local File
+      // (blob: URLs are handled by the upload flow, not this effect).
+      if (previewUrl?.startsWith('blob:')) return
+      const supabase = createBrowserSupabase()
+      const { data, error: signErr } = await supabase.storage
+        .from('hint-images')
+        .createSignedUrl(hint.content, 3600)
+      if (cancelled) return
+      if (signErr || !data) {
+        setPreviewUrl(null)
+        return
+      }
+      setPreviewUrl(data.signedUrl)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+    // previewUrl intentionally omitted: only the stored path drives loading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hint.content])
+
+  const handleFile = async (file: File) => {
+    setError(null)
+    setIsBusy(true)
+    const objectUrl = URL.createObjectURL(file)
+    setPreviewUrl(objectUrl)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await uploadHintImageAction(fd)
+      if (!res.ok) {
+        setError(res.error)
+        URL.revokeObjectURL(objectUrl)
+        setPreviewUrl(hint.content ? null : null)
+        return
+      }
+      const previousPath = hint.content
+      onUpdate({ content: res.path })
+      if (previousPath && previousPath !== res.path) {
+        // Best-effort orphan cleanup; failures aren't user-actionable.
+        deleteHintImageAction(previousPath).catch(() => {})
+      }
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleClear = async () => {
+    const previousPath = hint.content
+    onUpdate({ content: '' })
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(null)
+    if (previousPath) {
+      await deleteHintImageAction(previousPath).catch(() => {})
+    }
+  }
+
+  return (
+    <div className="flex flex-1 flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        {previewUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="힌트 이미지 미리보기"
+              className="h-14 w-14 rounded border border-gray-200 object-cover"
+            />
+            <label className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
+              {isBusy ? '업로드 중...' : '다른 사진'}
+              <input
+                type="file"
+                accept={IMAGE_ACCEPT}
+                className="hidden"
+                disabled={isBusy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleFile(f)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={isBusy}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-30"
+            >
+              사진 삭제
+            </button>
+          </>
+        ) : (
+          <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-dashed border-gray-400 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">
+            {isBusy
+              ? '업로드 중...'
+              : '+ 사진 선택 (5MB 이하 · JPG/PNG/WebP/GIF)'}
+            <input
+              type="file"
+              accept={IMAGE_ACCEPT}
+              className="hidden"
+              disabled={isBusy}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) handleFile(f)
+                e.target.value = ''
+              }}
+            />
+          </label>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   )
 }
