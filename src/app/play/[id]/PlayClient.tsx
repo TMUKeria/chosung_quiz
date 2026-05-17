@@ -9,7 +9,7 @@ import {
   removeJongsung,
 } from '@/lib/utils/hangul'
 
-type Hint = { type: string; content: string }
+type Hint = { type: string; content: string; imageUrl?: string | null }
 type Question = {
   answer: string
   category: string | null
@@ -219,6 +219,22 @@ export function PlayClient({
     )
     .map(({ hint }) => hint.content)
 
+  // image_intro hints are pinned: shown from the start, no reveal button.
+  const introImageUrls = current.hints
+    .filter((h) => h.type === 'image_intro' && h.imageUrl)
+    .map((h) => h.imageUrl as string)
+
+  // image hints behave like text hints — revealed only after the teacher clicks.
+  const revealedImageUrls = current.hints
+    .map((h, i) => ({ hint: h, idx: i }))
+    .filter(
+      ({ hint, idx }) =>
+        hint.type === 'image' &&
+        hint.imageUrl &&
+        revealedCells.has(`${idx}:image`),
+    )
+    .map(({ hint }) => hint.imageUrl as string)
+
   return (
     <main className="flex min-h-screen flex-col bg-white p-6 text-black">
       <header className="mb-6 flex items-center justify-between text-sm">
@@ -236,6 +252,20 @@ export function PlayClient({
           <p className="text-3xl text-gray-600 sm:text-4xl">
             카테고리: <span className="font-semibold">{current.category}</span>
           </p>
+        )}
+
+        {introImageUrls.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            {introImageUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={url}
+                alt={`도입 이미지 ${i + 1}`}
+                className="max-h-[35vh] max-w-[45vw] rounded border border-gray-200 object-contain"
+              />
+            ))}
+          </div>
         )}
 
         {showAnswer ? (
@@ -260,6 +290,20 @@ export function PlayClient({
               <li key={i}>{t}</li>
             ))}
           </ul>
+        )}
+
+        {revealedImageUrls.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            {revealedImageUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={url}
+                alt={`힌트 이미지 ${i + 1}`}
+                className="max-h-[35vh] max-w-[45vw] rounded border border-gray-200 object-contain"
+              />
+            ))}
+          </div>
         )}
       </section>
 
@@ -290,6 +334,28 @@ export function PlayClient({
                   </button>,
                 ]
               }
+              if (h.type === 'image') {
+                const cellKey = `${i}:image`
+                const active = revealedCells.has(cellKey)
+                return [
+                  <button
+                    key={cellKey}
+                    type="button"
+                    onClick={() => toggleCell(cellKey)}
+                    disabled={showAnswer}
+                    className={[
+                      'rounded border px-3 py-2 text-sm transition disabled:opacity-30',
+                      active
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50',
+                    ].join(' ')}
+                  >
+                    이미지 힌트
+                  </button>,
+                ]
+              }
+              // image_intro is auto-displayed above; no reveal button needed.
+              if (h.type === 'image_intro') return []
               const typeLabel =
                 h.type === 'reveal_jongsung'
                   ? '받침'
