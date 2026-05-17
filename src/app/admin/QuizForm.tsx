@@ -31,8 +31,30 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: '[data-tour="add-hint"]',
-    content:
-      '힌트는 4종류: 텍스트 / 받침 / 모음 / 글자 전체. 종류를 고른 뒤 정답의 어떤 글자를 공개할지 chip을 눌러 직접 선택해야 힌트가 완성됩니다. 한 힌트에 여러 글자를 선택하면 퀴즈 풀기 화면에서 클릭마다 하나씩 차례로 공개돼요.',
+    content: (
+      <div className="text-left text-sm leading-relaxed">
+        <p className="mb-2 font-semibold">힌트는 4종류예요 (정답이 「치킨」일 때):</p>
+        <ul className="mb-3 space-y-1">
+          <li>
+            • <b>텍스트</b> — 직접 쓴 문장 힌트. 예: 「닭으로 만든 음식」
+          </li>
+          <li>
+            • <b>받침</b> — 그 글자의 받침만 공개. 예: 「친」의 받침 「ㄴ」
+          </li>
+          <li>
+            • <b>모음</b> — 자음+모음만 공개, 받침은 가림. 예: 「치」, 「키」
+          </li>
+          <li>
+            • <b>글자 전체</b> — 그 글자 통째로 공개. 예: 「치」
+          </li>
+        </ul>
+        <p>
+          타입을 고른 뒤 chip(글자 버튼)으로 어떤 글자를 공개할지 직접
+          선택하세요. 한 힌트에 여러 글자를 고르면 퀴즈 풀기에서 클릭마다
+          하나씩 차례로 공개돼요.
+        </p>
+      </div>
+    ),
     skipBeacon: true,
   },
   {
@@ -271,10 +293,9 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
         <button
           type="button"
           onClick={startTour}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 text-base text-gray-600 hover:bg-gray-50"
-          aria-label="가이드 보기"
+          className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
         >
-          ?
+          사용 가이드
         </button>
       </div>
 
