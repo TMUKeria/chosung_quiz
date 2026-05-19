@@ -4,16 +4,11 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { SaveQuizInput, SaveQuizResult } from '../quiz-form-types'
+import { validateSaveQuizInput } from '../validate-quiz-input'
 
 export async function saveQuizAction(input: SaveQuizInput): Promise<SaveQuizResult> {
-  if (!input.title.trim()) return { error: '퀴즈 제목을 입력해주세요.' }
-  if (input.questions.length === 0) return { error: '문제를 1개 이상 추가해주세요.' }
-  for (const q of input.questions) {
-    if (!q.answer.trim()) return { error: '모든 문제의 정답을 입력해주세요.' }
-    for (const h of q.hints) {
-      if (!h.content.trim()) return { error: '모든 힌트의 내용을 입력해주세요.' }
-    }
-  }
+  const validationError = validateSaveQuizInput(input)
+  if (validationError) return { error: validationError }
 
   const supabase = await createClient()
   const {

@@ -14,6 +14,7 @@ import {
   uploadHintImageAction,
 } from './hint-image-actions'
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
+import { validateSaveQuizInput } from './validate-quiz-input'
 
 const TOUR_STORAGE_KEY = 'chosung-quiz-create-tour-seen'
 
@@ -257,16 +258,25 @@ export function QuizForm({ mode, initialData, onSave }: QuizFormProps) {
 
   const handleSave = () => {
     setError(null)
+    const payload = {
+      title,
+      questions: questions.map((q) => ({
+        answer: q.answer,
+        category: q.category.trim() || null,
+        hints: q.hints.map((h) => ({ type: h.type, content: h.content })),
+      })),
+    }
+    // Pre-check on the client so mobile users get an instant message that
+    // names the exact problem/hint instead of waiting for a server round-trip
+    // with a generic error.
+    const clientError = validateSaveQuizInput(payload)
+    if (clientError) {
+      setError(clientError)
+      return
+    }
     setIsDirty(false)
     startTransition(async () => {
-      const result = await onSave({
-        title,
-        questions: questions.map((q) => ({
-          answer: q.answer,
-          category: q.category.trim() || null,
-          hints: q.hints.map((h) => ({ type: h.type, content: h.content })),
-        })),
-      })
+      const result = await onSave(payload)
       if (result?.error) {
         setError(result.error)
         setIsDirty(true)
