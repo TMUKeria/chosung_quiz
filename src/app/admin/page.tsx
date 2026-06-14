@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { logoutAction } from './actions'
 import { QuizCard } from './QuizCard'
+import { PatchNotesButton } from './PatchNotesButton'
 
 export default async function AdminHomePage() {
   const supabase = await createClient()
@@ -26,14 +27,17 @@ export default async function AdminHomePage() {
     <main className="mx-auto max-w-2xl p-6">
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold">초성 퀴즈</h1>
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            로그아웃
-          </button>
-        </form>
+        <div className="flex items-center gap-2">
+          <PatchNotesButton />
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              로그아웃
+            </button>
+          </form>
+        </div>
       </header>
 
       {user?.email && (
