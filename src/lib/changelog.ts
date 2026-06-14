@@ -24,6 +24,17 @@ export interface ReleaseNote {
 /** 최신순(내림차순)으로 정렬. 맨 앞이 최신 버전. */
 export const CHANGELOG: readonly ReleaseNote[] = [
   {
+    version: '1.1.1',
+    date: '2026-06-14',
+    title: '저장 오류 안내가 정확해졌어요',
+    changes: [
+      {
+        type: 'fix',
+        text: '힌트를 빠뜨려 저장이 안 될 때, 몇 번째 문제의 어느 힌트가 비었는지 콕 집어 알려줘요.',
+      },
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-06-14',
     title: '사진 힌트와 패치노트가 추가됐어요',
